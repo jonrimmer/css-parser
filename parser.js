@@ -9,6 +9,7 @@
         factory(root);
     }
 }(this, function (exports) {
+var endingTokenTypes = {"(":")", "[":"]", "{":"}"};
 
 function parse(tokens) {
 	var mode = 'top-level';
@@ -204,7 +205,7 @@ function parse(tokens) {
 	}
 
 	function consumeASimpleBlock() {
-		var endingTokenType = {"(":")", "[":"]", "{":"}"}[token.tokenType];
+		var endingTokenType = endingTokenTypes[token.tokenType];
 		var block = new SimpleBlock(token.tokenType);
 
 		for(;;) {
@@ -240,6 +241,9 @@ function parse(tokens) {
 	}
 }
 
+function toCSS(e) { return e.toCSS(); };
+function arrToCSS(a, delim) { return a.map(toCSS).join(delim || '').trim(); };
+
 function CSSParserRule() { return this; }
 CSSParserRule.prototype.fillType = '';
 CSSParserRule.prototype.toString = function(indent) {
@@ -259,6 +263,9 @@ Stylesheet.prototype.type = "STYLESHEET";
 Stylesheet.prototype.toJSON = function() {
 	return {type:'stylesheet', value: this.value.map(function(e){return e.toJSON();})};
 }
+Stylesheet.prototype.toCSS = function() {
+	return arrToCSS(this.value, ' ');
+}
 
 function AtRule(name) {
 	this.name = name;
@@ -276,6 +283,16 @@ AtRule.prototype.appendPrelude = function(val) {
 }
 AtRule.prototype.toJSON = function() {
 	return {type:'at', name:this.name, prelude:this.prelude.map(function(e){return e.toJSON();}), value:this.value.map(function(e){return e.toJSON();})};
+}
+AtRule.prototype.toCSS = function() {
+	var prelude = arrToCSS(this.prelude);
+	var css = '@' + this.name + (prelude ? ' ' + prelude : '');
+
+	if (this.fillType == 'rule' || this.fillType == 'declaration') {
+		css += ' { ' + arrToCSS(this.value, ' ') + ' }';
+	}
+
+	return css;
 }
 AtRule.registry = {
 	'import': '',
@@ -307,6 +324,9 @@ StyleRule.prototype.appendSelector = function(val) {
 StyleRule.prototype.toJSON = function() {
 	return {type:'selector', selector:this.selector.map(function(e){return e.toJSON();}), value:this.value.map(function(e){return e.toJSON();})};
 }
+StyleRule.prototype.toCSS = function() {
+	return arrToCSS(this.selector) + ' { ' + arrToCSS(this.value, ' ') + ' }';
+}
 
 function Declaration(name) {
 	this.name = name;
@@ -317,6 +337,9 @@ Declaration.prototype = new CSSParserRule;
 Declaration.prototype.type = "DECLARATION";
 Declaration.prototype.toJSON = function() {
 	return {type:'declaration', name:this.name, value:this.value.map(function(e){return e.toJSON();})};
+}
+Declaration.prototype.toCSS = function() {
+	return this.name + ': ' + arrToCSS(this.value) + ';';
 }
 
 function SimpleBlock(type) {
@@ -329,6 +352,9 @@ SimpleBlock.prototype.type = "BLOCK";
 SimpleBlock.prototype.toJSON = function() {
 	return {type:'block', name:this.name, value:this.value.map(function(e){return e.toJSON();})};
 }
+SimpleBlock.prototype.toCSS = function() {
+	return this.name + arrToCSS(this.value) + endingTokenTypes[this.name];
+}
 
 function Func(name) {
 	this.name = name;
@@ -340,6 +366,9 @@ Func.prototype.type = "FUNCTION";
 Func.prototype.toJSON = function() {
 	return {type:'func', name:this.name, value:this.value.map(function(e){return e.toJSON();})};
 }
+Func.prototype.toCSS = function() {
+	return this.name + '(' + arrToCSS(this.value, ', ') + ')';
+}
 
 function FuncArg() {
 	this.value = [];
@@ -349,6 +378,9 @@ FuncArg.prototype = new CSSParserRule;
 FuncArg.prototype.type = "FUNCTION-ARG";
 FuncArg.prototype.toJSON = function() {
 	return this.value.map(function(e){return e.toJSON();});
+}
+FuncArg.prototype.toCSS = function() {
+	return arrToCSS(this.value);
 }
 
 // Exportation.
